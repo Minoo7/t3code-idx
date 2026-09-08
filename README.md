@@ -4,9 +4,24 @@ Disposable Firebase Studio (formerly Project IDX) workspaces that run a headless
 [T3 Code](https://github.com/pingdotgg/t3code) server. Every click on the button below creates a
 fresh VM with `t3 serve` supervised as the workspace preview.
 
-[<img src="https://cdn.firebasestudio.dev/btn/open_dark_32.svg" alt="Open in Firebase Studio">](https://studio.firebase.google.com/import?url=https://github.com/OWNER/t3code-idx)
+[<img src="https://cdn.firebasestudio.dev/btn/open_dark_32.svg" alt="Open in Firebase Studio">](https://studio.firebase.google.com/import?url=https://github.com/Minoo7/t3code-idx)
 
-Replace `OWNER` after you push this repo. Same link, new workspace, every time.
+
+> **Firebase Studio stopped accepting new workspaces on June 22, 2026** and shuts down
+> March 22, 2027. The import button above no longer works. Existing workspaces still run;
+> retrofit one with the section below.
+
+## Retrofit an existing workspace
+
+Open the old workspace, open a terminal at the workspace root, paste:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Minoo7/t3code-idx/main/bootstrap.sh | bash
+```
+
+It backs up the old `.idx/`, drops in this template's `.idx/`, and pre-installs `t3` if Node
+is already present. Then Command Palette → **Firebase Studio: Rebuild Environment**. After the
+reload the `web` preview runs `t3 serve`; run `bash .idx/pair.sh` for the pairing link.
 
 ## What happens on create
 
