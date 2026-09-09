@@ -21,7 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/Minoo7/t3code-idx/main/bootstrap.sh
 
 It backs up the old `.idx/`, drops in this template's `.idx/`, and pre-installs `t3` if Node
 is already present. Then Command Palette → **Firebase Studio: Rebuild Environment**. After the
-reload the `web` preview runs `t3 serve`; run `bash .idx/pair.sh` for the pairing link.
+reload `onStart` launches the server and tunnel; run `bash .idx/pair.sh` for pairing links.
 
 ## What runs on every workspace open
 
