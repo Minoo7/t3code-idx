@@ -3,7 +3,7 @@
 set -euo pipefail
 export PATH="${NPM_CONFIG_PREFIX:-$HOME/.npm-global}/bin:$PATH"
 
-PORT="${PORT:-9271}"
+PORT="${1:-${PORT:-9271}}"
 T3_HOME="${T3CODE_HOME:-$HOME/.t3}"
 mkdir -p "$T3_HOME" "$HOME/projects"
 echo "$PORT" > "$T3_HOME/idx-port"

@@ -44,7 +44,7 @@
       previews = {
         # The preview manager supervises the server and assigns $PORT.
         web = {
-          command = [ "bash" ".idx/serve.sh" ];
+          command = [ "bash" ".idx/serve.sh" "$PORT" ];
           manager = "web";
         };
       };
