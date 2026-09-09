@@ -62,6 +62,12 @@ new every restart, so every restart means re-pairing. For a stable host:
 Agents: run `claude` and `codex login --device-auth` once in the terminal. Clone repos into
 `~/projects`; add them with `t3 project` or from the UI.
 
+## Want it always on?
+
+Free sandboxes suspend when idle. For a server that stays up, see [`vm/`](vm/README.md):
+a cloud-init that turns any Ubuntu VM (Oracle Cloud Always Free ARM works) into a systemd
+`t3` service behind a Cloudflare named tunnel or Tailscale.
+
 ## Limits worth knowing
 
 - Free plan: 3 workspaces per account (10 with Google Developer Program, 30 with Premium).

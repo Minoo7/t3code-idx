@@ -1,0 +1,29 @@
+#cloud-config
+# Always-on T3 Code server. Paste as user data when creating an Ubuntu 22.04/24.04 VM
+# (Oracle Cloud Always Free A1, GCP, Hetzner, DigitalOcean, ...). Fill in the two values below.
+#
+# CF_TUNNEL_TOKEN: Cloudflare Zero Trust -> Networks -> Tunnels -> Create -> Cloudflared -> token.
+#                  Public hostname for the tunnel: <host> -> http://localhost:9271
+# CF_TUNNEL_HOST:  that hostname, e.g. t3.example.com
+#
+# Optional instead of / in addition to Cloudflare: TS_AUTHKEY=tskey-auth-... (Tailscale).
+
+package_update: true
+package_upgrade: false
+
+write_files:
+  - path: /etc/t3-vm.env
+    permissions: "0600"
+    owner: root:root
+    content: |
+      CF_TUNNEL_TOKEN=REPLACE_WITH_CLOUDFLARE_TUNNEL_TOKEN
+      CF_TUNNEL_HOST=t3.example.com
+      # TS_AUTHKEY=tskey-auth-REPLACE
+
+runcmd:
+  - set -a; . /etc/t3-vm.env; set +a;
+    curl -fsSL https://raw.githubusercontent.com/Minoo7/t3code-idx/main/vm/install.sh -o /root/t3-install.sh
+    && bash /root/t3-install.sh 2>&1 | tee /var/log/t3-install.log
+  - t3-pair 24h > /root/t3-first-pairing.txt 2>&1 || true
+
+final_message: "t3 vm ready after $UPTIME s; first pairing URL in /root/t3-first-pairing.txt"
