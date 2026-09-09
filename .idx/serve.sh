@@ -21,8 +21,9 @@ if [ "${1:-}" != "--daemon" ]; then
   run_once
 fi
 
-if pgrep -f "t3 serve --host 0.0.0.0 --port $PORT" >/dev/null 2>&1; then
-  echo "[t3-idx] t3 serve already running on :$PORT"
+PID_FILE="$T3_HOME/serve.pid"
+if [ -s "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+  echo "[t3-idx] t3 serve already supervised (pid $(cat "$PID_FILE"))"
   exit 0
 fi
 

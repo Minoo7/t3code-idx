@@ -2,9 +2,10 @@
 # Expose the T3 server through Cloudflare so desktop/mobile clients can reach it over
 # WebSocket (the Cloud Workstations public-port proxy drops WS upgrades).
 #
-#   Named tunnel (stable URL, survives restarts):
-#     put the tunnel token in $T3CODE_HOME/cf-tunnel-token and the public hostname
-#     (e.g. t3.example.com) in $T3CODE_HOME/cf-tunnel-host.
+#   Named tunnel (stable URL, survives restarts), either:
+#     a) dashboard token in $T3CODE_HOME/cf-tunnel-token + hostname in cf-tunnel-host, or
+#     b) locally-created tunnel: credentials json in cf-tunnel.json, uuid in cf-tunnel-id,
+#        hostname in cf-tunnel-host (cloudflared tunnel create + tunnel route dns).
 #   Quick tunnel (fallback): random *.trycloudflare.com URL, written to $T3CODE_HOME/tunnel-url.
 #
 # With --daemon, supervise in the background and return; used from dev.nix onStart.
@@ -23,13 +24,33 @@ if ! command -v cloudflared >/dev/null 2>&1; then
   exit 1
 fi
 
-if pgrep -f "cloudflared tunnel" >/dev/null 2>&1; then
-  echo "[t3-idx] cloudflared already running"
+PID_FILE="$T3_HOME/tunnel.pid"
+if [ -s "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+  echo "[t3-idx] cloudflared already running (pid $(cat "$PID_FILE"))"
   [ -f "$URL_FILE" ] && echo "[t3-idx] url: $(cat "$URL_FILE")"
   exit 0
 fi
 
-if [ -s "$TOKEN_FILE" ]; then
+CREDS_FILE="$T3_HOME/cf-tunnel.json"
+ID_FILE="$T3_HOME/cf-tunnel-id"
+if [ -s "$CREDS_FILE" ] && [ -s "$ID_FILE" ] && [ -s "$HOST_FILE" ]; then
+  # Locally-created tunnel (cloudflared tunnel create): ingress lives in a local config.
+  mode=named-creds
+  id="$(tr -d '[:space:]' < "$ID_FILE")"
+  host="$(tr -d '[:space:]' < "$HOST_FILE")"
+  chmod 600 "$CREDS_FILE"
+  cat >"$T3_HOME/cloudflared.yml" <<EOF
+tunnel: $id
+credentials-file: $CREDS_FILE
+no-autoupdate: true
+ingress:
+  - hostname: $host
+    service: http://127.0.0.1:$PORT
+  - service: http_status:404
+EOF
+  cmd=(cloudflared --config "$T3_HOME/cloudflared.yml" tunnel run)
+  echo "https://$host" > "$URL_FILE"
+elif [ -s "$TOKEN_FILE" ]; then
   mode=named
   # Token via env, not argv, so it never shows in process listings.
   TUNNEL_TOKEN="$(tr -d '[:space:]' < "$TOKEN_FILE")"
@@ -53,6 +74,7 @@ nohup bash -c '
     sleep 5
   done
 ' _ "${cmd[@]}" >>"$LOG" 2>&1 &
+echo $! > "$PID_FILE"
 disown
 
 if [ "$mode" = quick ]; then

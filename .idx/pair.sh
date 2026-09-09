@@ -8,7 +8,7 @@ T3_HOME="${T3CODE_HOME:-$HOME/.t3}"
 port="$(cat "$T3_HOME/idx-port" 2>/dev/null || echo 9271)"
 ttl="${1:-1h}"
 
-out="$(t3 pair --ttl "$ttl" --label "firebase-studio-${WEB_HOST%%.*}" 2>&1)"
+out="$(t3 pair --ttl "$ttl" --label "firebase-studio-$(printf %s "${WEB_HOST:-idx}" | cut -d. -f1)" 2>&1)"
 token="$(printf '%s\n' "$out" | sed -nE 's/^Token: *([A-Z0-9]+).*/\1/p' | head -n1)"
 
 if [ -z "$token" ]; then
