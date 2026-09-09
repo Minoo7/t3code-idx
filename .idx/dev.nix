@@ -10,6 +10,7 @@
     pkgs.gh
     pkgs.ripgrep
     pkgs.jq
+    pkgs.cloudflared
     # node-gyp fallback for node-pty when no prebuilt binary matches
     pkgs.python3
     pkgs.gcc
@@ -24,6 +25,8 @@
     T3CODE_HOST = "0.0.0.0";
     T3CODE_NO_BROWSER = "1";
     T3CODE_TELEMETRY_ENABLED = "0";
+    # Fixed port so tunnels and pairing URLs stay stable across restarts.
+    T3_PORT = "9271";
   };
 
   idx = {
@@ -36,18 +39,14 @@
       onStart = {
         # Repair/upgrade on every boot; cheap when already current.
         ensure-t3 = "bash .idx/install.sh";
+        # Supervised background server + Cloudflare tunnel (see tunnel.sh for named-tunnel setup).
+        t3-serve = "bash .idx/serve.sh --daemon";
+        t3-tunnel = "bash .idx/tunnel.sh --daemon";
       };
     };
 
-    previews = {
-      enable = true;
-      previews = {
-        # The preview manager supervises the server and assigns $PORT.
-        web = {
-          command = [ "bash" ".idx/serve.sh" "$PORT" ];
-          manager = "web";
-        };
-      };
-    };
+    # No web preview: the Cloud Workstations proxy drops WebSocket upgrades on public ports,
+    # and the preview iframe adds nothing over the tunnel URL.
+    previews.enable = false;
   };
 }

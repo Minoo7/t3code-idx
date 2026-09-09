@@ -23,47 +23,48 @@ It backs up the old `.idx/`, drops in this template's `.idx/`, and pre-installs 
 is already present. Then Command Palette → **Firebase Studio: Rebuild Environment**. After the
 reload the `web` preview runs `t3 serve`; run `bash .idx/pair.sh` for the pairing link.
 
-## What happens on create
+## What runs on every workspace open
 
-1. `.idx/dev.nix` provisions Node 22, Bun, git, gh, ripgrep and a C toolchain (node-pty fallback).
-2. `.idx/install.sh` installs `t3`, `@anthropic-ai/claude-code` and `@openai/codex` into
-   `~/.npm-global`. Home persists across workspace restarts; the Nix profile does not.
-3. The `web` preview runs `.idx/serve.sh`, which starts `t3 serve --host 0.0.0.0 --port $PORT`
-   with `~/projects` as the bootstrap project directory.
+`dev.nix` `onStart` runs three things: `install.sh` (installs/updates `t3`, `claude`, `codex`
+into `~/.npm-global`), `serve.sh --daemon` (supervised `t3 serve` on fixed port 9271, log in
+`~/.t3/serve.log`), and `tunnel.sh --daemon` (Cloudflare tunnel, log in `~/.t3/tunnel.log`).
+There is no web preview: the Cloud Workstations public-port proxy returns 503 on WebSocket
+upgrades, so the T3 desktop/mobile apps cannot connect through it. Browser access through the
+Google-authenticated port URL still works.
 
-## First use
+## Pairing
 
-1. Wait for the preview to come up (Firebase Studio panel > Previews, or the Backend ports list).
-2. In a workspace terminal run:
+```bash
+bash .idx/pair.sh          # default ttl 1h; pass e.g. 15m or 24h
+```
+
+Prints a token plus one URL per reachable route:
+
+- **Cloudflare tunnel URL**: paste into the desktop/mobile app "Add environment".
+- **Cloud Workstations port URL**: open in a browser signed into the same Google account.
+
+## Stable tunnel (recommended)
+
+Without configuration `tunnel.sh` starts a *quick* tunnel: random `*.trycloudflare.com` host,
+new every restart, so every restart means re-pairing. For a stable host:
+
+1. Cloudflare dashboard → Zero Trust → Networks → Tunnels → Create tunnel → Cloudflared.
+   Copy the token. Public hostname: pick e.g. `t3.example.com` → service `http://localhost:9271`.
+2. In the workspace terminal:
    ```bash
-   bash .idx/pair.sh          # default ttl 1h; pass e.g. 15m or 24h
+   printf '%s' 'TOKEN' > ~/.t3/cf-tunnel-token && chmod 600 ~/.t3/cf-tunnel-token
+   printf '%s' 't3.example.com' > ~/.t3/cf-tunnel-host
+   bash .idx/tunnel.sh --daemon
    ```
-3. Open the printed pairing URL in a browser signed into the same Google account.
-   The T3 Code web client is served by the server itself and pairs with the token.
-4. Log agents in from the terminal: `claude` (follow the login prompt) and `codex login --device-auth`.
-5. Clone repos into `~/projects` and add them with `t3 project` or from the UI.
+3. Pair once with `https://t3.example.com/pair#token=...`. Sessions persist in `~/.t3`, so
+   later workspace restarts reconnect without re-pairing.
 
-## Reaching the server from outside the browser
-
-The forwarded port URL is gated by your Google cookie by default. For the T3 Code
-desktop/mobile apps or anything without that cookie, either:
-
-- Firebase Studio panel > Backend ports > click the lock next to the port to make it public.
-  The pairing token still gates access, so mint short TTLs.
-- Or run `t3 connect link --headless` once to use the T3 Connect relay instead of exposing the port.
-
-## Environment knobs
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `T3_VERSION` | `latest` | Pin the `t3` npm version installed at boot |
-| `T3_SKIP_AGENTS` | `0` | Set `1` to skip installing the claude/codex CLIs |
-| `T3CODE_HOME` | `/home/user/.t3` | Server state (SQLite, auth, worktrees) |
-
-Set them in `.idx/dev.nix` under `env`.
+Agents: run `claude` and `codex login --device-auth` once in the terminal. Clone repos into
+`~/projects`; add them with `t3 project` or from the UI.
 
 ## Limits worth knowing
 
 - Free plan: 3 workspaces per account (10 with Google Developer Program, 30 with Premium).
 - `/home` is 10 GiB and persists; `/tmp` and the Nix store are 100 GiB and rebuilt.
-- Workspaces sleep when idle. The preview restarts on next open and `~/.t3` state survives.
+- Workspaces sleep when idle; running agents die, `~/.t3` state survives. Reopening the
+  workspace restarts server and tunnel. Nothing on the free tier stays up unattended.
