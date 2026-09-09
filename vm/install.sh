@@ -8,8 +8,11 @@
 #   T3_PORT=9271               loopback port t3 serve binds
 #   T3_VERSION=latest          npm version of t3
 #   T3_SKIP_AGENTS=0           1 = skip installing claude/codex CLIs
-#   CF_TUNNEL_TOKEN=...        Cloudflare named-tunnel token; installs cloudflared as a service
-#   CF_TUNNEL_HOST=t3.example  public hostname (only used for the pairing hint)
+#   CF_TUNNEL_TOKEN=...        Cloudflare dashboard-managed tunnel token; installs cloudflared service
+#   CF_TUNNEL_ID=<uuid> + CF_TUNNEL_CREDS_B64=<base64 of the tunnel credentials json>
+#                              locally-created tunnel (cloudflared tunnel create); ingress written to
+#                              /etc/cloudflared/config.yml routing CF_TUNNEL_HOST -> t3
+#   CF_TUNNEL_HOST=t3.example  public hostname (required for CF_TUNNEL_ID mode; hint otherwise)
 #   TS_AUTHKEY=...             Tailscale auth key; joins the tailnet and serves t3 over HTTPS
 set -euo pipefail
 
@@ -94,15 +97,42 @@ systemctl daemon-reload
 systemctl enable --now t3.service
 log "t3.service enabled on 127.0.0.1:$T3_PORT"
 
-# Cloudflare named tunnel → stable https hostname, WebSocket OK.
-if [ -n "${CF_TUNNEL_TOKEN:-}" ]; then
-  if ! command -v cloudflared >/dev/null 2>&1; then
-    log "installing cloudflared"
-    install -d -m 0755 /usr/share/keyrings
-    curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg -o /usr/share/keyrings/cloudflare-main.gpg
-    echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" >/etc/apt/sources.list.d/cloudflared.list
-    apt-get update -q && apt-get install -y -q cloudflared
+install_cloudflared() {
+  command -v cloudflared >/dev/null 2>&1 && return 0
+  log "installing cloudflared"
+  install -d -m 0755 /usr/share/keyrings
+  curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg -o /usr/share/keyrings/cloudflare-main.gpg
+  echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" >/etc/apt/sources.list.d/cloudflared.list
+  apt-get update -q && apt-get install -y -q cloudflared
+}
+
+# Cloudflare named tunnel, locally created: credentials file + local ingress config.
+if [ -n "${CF_TUNNEL_ID:-}" ] && [ -n "${CF_TUNNEL_CREDS_B64:-}" ] && [ -n "${CF_TUNNEL_HOST:-}" ]; then
+  install_cloudflared
+  install -d -m 0755 /etc/cloudflared
+  printf '%s' "$CF_TUNNEL_CREDS_B64" | base64 -d >"/etc/cloudflared/$CF_TUNNEL_ID.json"
+  chmod 600 "/etc/cloudflared/$CF_TUNNEL_ID.json"
+  cat >/etc/cloudflared/config.yml <<EOF
+tunnel: $CF_TUNNEL_ID
+credentials-file: /etc/cloudflared/$CF_TUNNEL_ID.json
+no-autoupdate: true
+ingress:
+  - hostname: $CF_TUNNEL_HOST
+    service: http://127.0.0.1:$T3_PORT
+  - service: http_status:404
+EOF
+  echo "https://$CF_TUNNEL_HOST" >"$T3_DATA/tunnel-url"
+  chown "$T3_USER:$T3_USER" "$T3_DATA/tunnel-url"
+  if [ ! -f /etc/systemd/system/cloudflared.service ]; then
+    cloudflared service install || log "WARNING: cloudflared service install failed"
   fi
+  systemctl daemon-reload
+  systemctl enable --now cloudflared >/dev/null 2>&1 || true
+  systemctl restart cloudflared >/dev/null 2>&1 || true
+  log "cloudflared configured: https://$CF_TUNNEL_HOST -> 127.0.0.1:$T3_PORT"
+# Cloudflare dashboard-managed tunnel: token only, ingress lives in Zero Trust.
+elif [ -n "${CF_TUNNEL_TOKEN:-}" ]; then
+  install_cloudflared
   # `service install` writes the token to /etc/systemd/system/cloudflared.service; re-running
   # with the same token is a no-op, so uninstall first to allow token rotation.
   if [ -n "${CF_TUNNEL_HOST:-}" ]; then
